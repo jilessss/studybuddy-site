@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Study Buddy verification</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #ffffff; font-family: Arial, Helvetica, sans-serif; }
+  body { display: flex; align-items: center; justify-content: center; }
+  #wrap { text-align: center; padding: 16px; }
+  #msg { margin-top: 12px; font-size: 14px; color: #444; min-height: 18px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="box"></div>
+  <div id="msg"></div>
+</div>
+
+<script>
+  // The app opens this page as  captcha.html?sitekey=<Turnstile site key>
+  // so no key is stored in this file. The result goes back to the app as a JSON string:
+  //   {"type":"token","value":"..."}  |  {"type":"error","value":"..."}  |  {"type":"expired"}
+  var params = new URLSearchParams(location.search);
+  var siteKey = params.get('sitekey') || '';
+  var widgetId = null;
+
+  function send(obj) {
+    var text = JSON.stringify(obj);
+    try { if (window.Captcha && Captcha.postMessage) Captcha.postMessage(text); } catch (e) {}
+    try { if (window.chrome && chrome.webview) chrome.webview.postMessage(text); } catch (e) {}
+    try { if (window.flutter_inappwebview) flutter_inappwebview.callHandler('captcha', text); } catch (e) {}
+  }
+
+  function say(t) { document.getElementById('msg').textContent = t || ''; }
+
+  function onTurnstileLoad() {
+    if (!siteKey) { say('Missing site key.'); send({ type: 'error', value: 'missing-sitekey' }); return; }
+    widgetId = turnstile.render('#box', {
+      sitekey: siteKey,
+      theme: 'light',
+      callback: function (token) { say(''); send({ type: 'token', value: token }); },
+      'error-callback': function (code) { say('Verification failed. Please try again.'); send({ type: 'error', value: String(code || 'error') }); },
+      'expired-callback': function () { say('Verification expired.'); send({ type: 'expired' }); },
+      'timeout-callback': function () { send({ type: 'expired' }); }
+    });
+  }
+
+  // The app can call this to get a fresh challenge (tokens are single-use).
+  window.resetCaptcha = function () {
+    say('');
+    if (window.turnstile && widgetId !== null) turnstile.reset(widgetId);
+  };
+</script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad" async defer></script>
+</body>
+</html>
